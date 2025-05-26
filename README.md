@@ -1,4 +1,4 @@
-# Bioinformatic pipeline of RRBS for ifferential methylation analysis - TFM 24/25
+# Bioinformatic pipeline of RRBS for differential methylation analysis - TFM 24/25
 
 ## Overview
 
