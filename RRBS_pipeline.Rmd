@@ -1,0 +1,295 @@
+---
+title: "RRBS Pipeline EPIBASE - Bioinformatics"
+author: "Núria Paisano Cabrera"
+date: "2025"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+### Software used
+
+- FastQC v0.12.1
+- MultiQC v1.18
+- Trim-Galore v0.6.6
+- Bismark v0.22.3
+- Bowtie2 v2.5.0
+
+Based on RRBS_Pipeline_V2_SB by Silvia Beato, 30/01/2024
+
+
+## FILE PREPARATION
+
+The files will be acquired in **.fastq** (or **.fastq.gz**) format. They should be copied in the hard disk and in cloud-based storage as a backup.
+
+Copy the files in the directory of the computer's hard disk that is going to be used. Change the directory in the terminal:
+```
+  cd /home/pathtodirectory
+
+```
+
+Check the md5sum of the files using:
+```
+  md5sum <file name with extension> <path of the file>
+
+```
+
+_NOTE: If the current directory is already set to where the file is, there is no need to specify the path of the file._
+
+The md5sum numbers of the files in the repository and the files in the computer hard drive should coincide. It is possible that the sent files already include a .txt document with the corresponding md5sum numbers.
+
+If the files are in **.fastq.gz** format, uncompress the data using:
+```
+  gunzip *fastq.gz
+
+```
+
+_NOTE: this step can be performed later to save space._
+
+If the file names have extra unwanted characters, they can be removed using:
+```
+  rename 's/_[^.-]+(?=\.)//' *.fastq*
+
+```
+
+
+## QUALITY CONTROL ANALYSIS (FastQC)
+
+The quality control is done using:
+```
+  cd ~/Dropbox/data/; fastqc *fastq.gz
+
+```
+
+To concentrate the QCs into one report:
+```
+  multiqc . -i PreAlignment-QC
+
+```
+
+The results will be saved in the same directory as the fastq files. To visualize the report for each sample click on the corresponding html file (will open a browser tab with the results). A description of each item of the report can be found at the [FastQC webpage](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/). Take into account that each item gives a pass/fail score that may not apply to a specific kind of library.
+
+The **number of reads per sample** ( _Total Sequences_ ) is found in the "basic statistics" module. For each sample, take note of this number in a separate excel sheet.
+
+Move all the QCs to a new folder:
+```
+  mkdir Pre-QC; mv *qc* Pre-QC/
+
+```
+
+
+## TRIMMING (Trim-Galore)
+
+Create a directory for the trimming output:
+```
+  mkdir trimming
+
+```
+
+Create a bash code and save it with the name RRBS-trimming-tg.sh **in the same folder where the .fastq files are**:
+```bash
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+sample_name=$(basename -s ".fastq.gz" "$1")
+/home/sbeato/SOFTWARE/TrimGalore-0.6.7/trim_galore -j 6 --illumina --clip_r1 2 --length 15 --fastqc /home/sbeato/Dropbox/data/${sample_name}.fastq.gz -o /home/sbeato/Dropbox/data/trimming/ --basename ${sample_name}
+
+ ```
+
+The *clip_r1* option removes the first 2 nucleotides from the 5'UTR for each read. This avoids methylation bias due to artificial cytosines added during library preparation.
+
+The *--fastqc* option calls the FastQC software to automatically perform a quality control report on each file processed with the bash code.
+ 
+Perform the trimming with the bash code:
+```
+  cd ~/Dropbox/data
+  find . -name "*.fastq.gz" | xargs -n 1 -P 1 bash RRBS-trimming-tg.sh 2> RRBS-trimming-tg.log
+  cd ~/Dropbox/data/trimming; mkdir Trim-QC; mv *qc* Trim-QC; cd Trim-QC; multiqc . -i Trimming-QC
+
+```
+
+The **% of trimming** indicated in the trimming report of each file is calculated as 100 - the trimmed bases ( _Quality-trimmed_ ). Record it in the separate excel sheet. Also check at the bottom of the report the total number of sequences processed; this number should coincide with the total number of reads for the sample (FastQC step).
+
+
+## BISULFITE CONVERSION OF THE REFERENCE GENOME (Bismark, bowtie2)
+
+Download the _D. labrax_ genome (2021 version) in fasta format and save it in the genomes directory (dlabrax_2021 folder). Download from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_905237075.1/) to ensure the chromosome nomenclature is the same for the gene annotation and for CpG island annotation files that will later be downloaded from UCSC. The NCBI genome file is labeled _GCF_905237075.1_dlabrax2021_genomic.fna_. The gene annotation file should be labeled _genome_annotation_bed.txt_ and the CpG island annotation file should be labeled _cpg_annotation_bed.txt_ (they should be bed files in txt format).
+```
+  cd ~/genomes/
+  mkdir dlabrax_2021
+  cp -a /home/sbeato/Downloads/ncbi_dataset/ncbi_dataset/data/GCF_905237075.1/. /home/sbeato/genomes/dlabrax_2021/
+  cd ~/genomes/dlabrax_2021
+  mv genomic.gtf gene_annotation.gtf
+  mv GCF_905237075.1_dlabrax2021_genomic.fna dlabrax2021_genome.fa
+
+```
+
+Perform the bisulfite conversion using:
+```
+  cd ~/genomes/dlabrax_2021
+  /home/sbeato/SOFTWARE/Bismark-0.22.3/bismark_genome_preparation --path_to_aligner /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ --verbose /home/sbeato/genomes/dlabrax_2021
+  
+```
+
+This step only needs to be done once per genome.
+
+
+## ALIGNMENT (Bismark)
+
+Create a bash code and save it with the name RRBS-alignment-bk.sh **in the same folder where the trimmed files are**:
+```bash
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+sample_name=$(basename -s "_trimmed.fq.gz" "$1")
+/home/sbeato/SOFTWARE/Bismark-0.22.3/bismark --path_to_bowtie2 /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ /home/sbeato/Dropbox/data/trimming/${sample_name}_trimmed.fq.gz --genome_folder /home/sbeato/genomes/dlabrax_2021 -o /home/sbeato/Dropbox/data/trimming/alignment/${sample_name}.bam --pbat --multicore 4
+
+ ```
+
+The _pbat_ option ensures the alignment of the reads against the CTOT and CTOB strands.
+
+The _multicore_ option determines the number of threads to be used for the operation. For an intel CORE i5 processor, 4 threads is okay, but this number can be changed for other processors.
+
+Perform the alignment with the bash code:
+```
+  cd ~/Dropbox/data/trimming
+  mkdir alignment
+  find . -name "*_trimmed.fq.gz" | xargs -n 1 -P 1 bash RRBS-alignment-bk.sh 2> RRBS-alignment-bk.log
+
+```
+
+The **% of alignment** indicated in the file RRBS-alignment.log is the percentage of matched sequences ( _Mapping efficiency_ ). Record it in the separate excel sheet.
+
+
+## METHYLATION CALLING (Bismark)
+
+Create a bash code and save it with the name RRBS-extraction-bk.sh **in the same folder where the aligned files are**:
+```bash
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+sample_name=$(basename -s ".bam" "$1")
+/home/sbeato/SOFTWARE/Bismark-0.22.3/bismark_methylation_extractor -s --merge_non_CpG --comprehensive --bedGraph --cytosine_report --gzip -o /home/sbeato/Dropbox/data/trimming/alignment/extraction/ --multicore 4 --genome_folder /home/sbeato/genomes/dlabrax_2021 /home/sbeato/Dropbox/data/trimming/alignment/${sample_name}.bam/${sample_name}_trimmed_bismark_bt2.bam
+
+ ```
+
+Perform the calling with the bash code:
+```
+  cd ~/Dropbox/data/trimming/alignment
+  mkdir extraction
+  find . -name "*.bam" | xargs -n 1 -P 1 bash RRBS-extraction-bk.sh 2> RRBS-extraction-bk.log
+
+```
+
+The required files for analysis with the methylKit package is **CpG_report**. Set them aside with:
+```
+  cd ~/Dropbox/data/trimming/alignment/extraction
+  mkdir CpG_reports
+  mv ~/Dropbox/data/trimming/alignment/extraction/*CpG_report.txt.gz ~/Dropbox/data/trimming/alignment/extraction/CpG_reports
+
+```
+
+It is better to rename the files as `<sampleID>_CpG_report.txt` to avoid over-complicated names in the downstream pipeline.
+
+Now the files are ready to start the processing in R.
+
+
+## BISULFITE CONVERSION EFFICIENCY
+
+This efficiency is calculated taking into account the total of conversion of the spike-in controls that were added during library preparation.
+
+Go to the _Documents_ section of the [Premium RRBS Kit v2 page](https://www.diagenode.com/en/p/premium-rrbs-kit-V2-x24) and download the following files:
+
+- **RRBS_methylated_control.fa**: the sequence of the methylated spike-in control in FASTA format
+- **RRBS_unmethylated_control.fa**: the sequence of the unmethylated spike-in control in FASTA format
+- **RRBS_control_unmC.bed**: the positions of the unmethylated cytosines in the sequence of the methylated control in BED format
+- **Premium RRBS-spikein-controls-manual.pdf**: manual for the conversion efficiency pipeline
+
+The fasta files for the controls should be placed in specific directories within the `genomes` folder as if they were separate genomes:
+```
+  cd ~/genomes/
+  mkdir RRBS_methylated_control
+  mkdir RRBS_unmethylated_control
+
+```
+
+Then an indexing is made in these controls with the instructions:
+```
+  cd ~/genomes/
+  /home/sbeato/SOFTWARE/Bismark-0.22.3/bismark_genome_preparation --path_to_aligner /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ --verbose /home/sbeato/genomes/RRBS_methylated_control
+  /home/sbeato/SOFTWARE/Bismark-0.22.3/bismark_genome_preparation --path_to_aligner /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ --verbose /home/sbeato/genomes/RRBS_unmethylated_control
+
+```
+
+So now we can perform the alignment of the trimmed read pairs to the converted spike-in sequences. Create a bash code for the methylated control and save it with the name RRBS-alignment-bk-BCE-Meth.sh **in the same folder where the trimmed files are**:
+```bash
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+sample_name=$(basename -s "_trimmed.fq.gz" "$1")
+/home/sbeato/SOFTWARE/Bismark-0.22.3/bismark --path_to_bowtie2 /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ /home/sbeato/Dropbox/data/trimming/${sample_name}_trimmed.fq.gz --genome_folder /home/sbeato/genomes/RRBS_methylated_control -o /home/sbeato/Dropbox/data/trimming/BCE/${sample_name}.bam --prefix Meth_ctrl --pbat --multicore 4
+
+ ```
+
+Create a second bash file for the unmethylated control and save it with the name RRBS-alignment-bk-BCE-UNmeth.sh **in the same folder where the trimmed files are**:
+```bash
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+sample_name=$(basename -s "_trimmed.fq.gz" "$1")
+/home/sbeato/SOFTWARE/Bismark-0.22.3/bismark --path_to_bowtie2 /home/sbeato/SOFTWARE/bowtie2-2.5.0-linux-x86_64/ /home/sbeato/Dropbox/data/trimming/${sample_name}_trimmed.fq.gz --genome_folder /home/sbeato/genomes/RRBS_unmethylated_control -o /home/sbeato/Dropbox/data/trimming/BCE/${sample_name}.bam --prefix Unmeth_ctrl --pbat --multicore 4
+
+ ```
+ 
+ Perform the alignments with the bash codes:
+```
+  cd ~/Dropbox/data/trimming
+  mkdir BCE
+  find . -name "*_trimmed.fq.gz" | xargs -n 1 -P 1 bash RRBS-alignment-bk-BCE-Meth.sh 2> RRBS-alignment-bk-BCE-Meth.log
+  find . -name "*_trimmed.fq.gz" | xargs -n 1 -P 1 bash RRBS-alignment-bk-BCE-UNmeth.sh 2> RRBS-alignment-bk-BCE-UNmeth.log
+
+```
+
+_NOTE: before performing the second alignment, change the name of the methylation folders to avoid over-writing the files. A good idea is to write the same prefix as the files (Meth_ctrl or Unmeth_ctrl)._
+
+_NOTE: move the RRBS_control_unmC.bed file in the BCE directory as well for later._
+
+Each of the resulting directories should contain **two** files, a bam file and a report. To speed up the downstream steps, it is advisable to distribute the files per pool now. So, create as many directories as pools have been analyzed and move the files (outside of their original directory) to these new folders before proceeding. Both methylated and unmethylated files for the same sample should be placed in the same pool directory. For each pool directory, the downstream analysis will be the same.
+
+_NOTE: the deduplication step does not need to be applied since we do not have UMI adapters in our samples._
+
+Now we proceed with the sorting of the bam files and the methylation extraction:
+```
+  cd ~/Dropbox/data/trimming/BCE/<directory name>
+  mkdir cov_files
+  samtools sort <sample ID>_trimmed_bismark_bt2.bam -o <sample ID>_sorted.bam; /home/sbeato/SOFTWARE/Bismark-0.22.3/bismark_methylation_extractor -s --gzip --bedGraph --CX <sample ID>_sorted.bam; gunzip <sample ID>_sorted.bismark.cov.gz; mv *sorted.bismark.cov ~/Dropbox/data/trimming/BCE/<directory name>/cov_files
+
+```
+
+Once the coverage files are located and set aside, we can now start the calculation of the BCE with:
+```
+  cd cov_files
+  awk '{ meth += $5; coverage += ($5+$6) } END { print meth/coverage*100 }' Unmeth*.bismark.cov
+  sort -k2,2n Meth*.bismark.cov | intersectBed -v -a - -b /home/sbeato/Dropbox/data/trimming/BCE/RRBS_control_unmC.bed | awk '{ meth += $5; coverage += ($5+$6) } END { print meth/coverage*100 }'
+
+```
+
+The **awk** command processes the **unmethylated** files, whereas the lower instruction is used to make the calculations for the **methylated** files.
+
+The calculation is `% methylated - % unmethylated` (output 2 - output 1). This number should be recorded in the separate excel sheet. Reminder that this value is for a whole pool, so samples that belonged in the same pool will share the same value.
+
