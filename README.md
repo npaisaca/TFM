@@ -8,6 +8,6 @@ The contents of this repository and the results of the analysis were included in
 
 ## Files
 
-- **RRBS_pipeline.rmd**: code to perform the bioinformatic pipeline of the RRBS analysis, from file download to CpG report extraction and bisulfite conversion efficiency calculation.
+- **RRBS_pipeline.Rmd**: code to perform the bioinformatic pipeline of the RRBS analysis, from file download to CpG report extraction and bisulfite conversion efficiency calculation.
 
 All files were created in an R-markdown format.
