@@ -1,0 +1,1985 @@
+---
+title: "RRBS Pipeline EPIBASE - R"
+author: "Núria Paisano Cabrera"
+date: "2025"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+### Software used
+
+- R v4.4.2
+
+Based on the methylkit package vignette ([DOI](10.18129/B9.bioc.methylKit), [url](https://www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html)).
+
+
+## PREPARATION OF R ENVIRONMENT
+
+Download the required packages:
+```{r}
+install.packages(c("devtools", "dplyr", "tidyverse", "ggplot2", "ggrepel", "patchwork", "powerjoin", "lemon", "purrr"))
+
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(c("methylKit"))
+
+lapply(c("dplyr", "tidyverse", "ggplot2", "ggrepel", "methylKit", "patchwork", "powerjoin", "lemon"), library, character.only=TRUE)
+
+# It is possible that the methylKit package doesn't load and, instead, this error appears:
+  # Error: package or namespace load failed for ‘methylKit’:
+  # object ‘key<-’ is not exported by 'namespace:data.table'
+
+# This is due to an issue with the data.table package. An older version of this package needs to be installed for methylKit to work. In this case, use:
+
+lapply(c("devtools"), library, character.only=TRUE)
+
+find.package("data.table")
+packageVersion("data.table") #versions higher than 1.16 do not work.
+
+remove.packages("data.table")
+install_version(c('data.table'), c('1.16'))
+lapply(c("data.table"), library, character.only=TRUE)
+
+lapply(c("dplyr", "tidyverse", "ggplot2", "ggrepel", "methylKit", "patchwork", "powerjoin", "lemon"), library, character.only=TRUE)
+
+```
+
+
+## METHYLATION ANALYSIS
+
+### Reading the methylation call files
+
+_Reminder: the file used for this step is obtained after the methylation calling step during the RRBS pipeline, and is called "CpG report"._
+
+In order to ensure methylKit will be able to locate de CpG report files, we are going to copy them to the `extdata` folder within the methylKit package folder in the R files. To do so, find the directory where the methylKit package was installed, locate the `extdata` folder, create a subdirectory (in this case we'll cal it stress_data), and copy the .txt files there:
+```{r}
+find.package("methylKit")
+
+#Open output directory
+#Locate and open extdata directory
+#Crete a new directory to store the CpG report files
+#Copy .txt files from the CpG_reports directory to the new directory
+
+```
+
+Also copy in this directory the annotation files downloaded earlier, since they will be needed downstream.
+
+_NOTE: In order to make the lists below in an easier manner, feel free to change the file names of the reports if they are too long and confusing, as long as the essential information is kept (sample ID, file type, other characteristics of importance)._
+
+Once all the reports are located, a list has to be made to process all reports at the same time with the methylKit package. To do so we use:
+```{r}
+#Blood
+sample_list_BL=list(system.file("extdata/stress_data", "2510BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2516BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2521BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "261BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "331BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "334BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "335BL_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "336BL_CpG_report.txt", package = "methylKit"))
+
+#Brain
+sample_list_BR=list(system.file("extdata/stress_data", "2510BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2516BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2521BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "261BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "331BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "334BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "335BR_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "336BR_CpG_report.txt", package = "methylKit"))
+
+#Gonad
+sample_list_GO=list(system.file("extdata/stress_data", "2510G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2516G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2521G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "261G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "331G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "334G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "335G_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "336G_CpG_report.txt", package = "methylKit"))
+
+#Liver
+sample_list_LI=list(system.file("extdata/stress_data", "2510LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2516LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2521LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "261LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "331LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "334LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "335LI_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "336LI_CpG_report.txt", package = "methylKit"))
+
+#Muscle
+sample_list_MU=list(system.file("extdata/stress_data", "2510M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2516M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "2521M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "331M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "334M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "335M_CpG_report.txt", package = "methylKit"),
+                    system.file("extdata/stress_data", "336M_CpG_report.txt", package = "methylKit"))
+
+```
+
+
+After the list is created, an object is created from it in order to start filtering and analyzing. It is good to create one object with CpGs with at least 1x coverage first, to check the total number of CpGs that were detected by the informatic pipeline, and then create an object with only the 10x covered CpGs since that is the threshold used for downstream analysis. A good number of CpGs is between 300,000-500,000. These objects are done via:
+```{r}
+#Blood
+#Object with 1x CpGs
+myobj.BL.nocoverage=methRead(sample_list_BL,
+                             sample.id=list("2510BL","2516BL","2521BL","261BL","331BL","334BL", "335BL", "336BL"),
+                             assembly="dlabrax2021",
+                             pipeline = "bismarkCytosineReport",
+                             treatment=c(0,0,0,0,1,1,1,1),
+                             context="CpG",
+                             mincov = 1)
+
+View(myobj.BL.nocoverage)
+
+#Object with 10x CpGs
+myobj.BL=methRead(sample_list_BL,
+                  sample.id=list("2510BL","2516BL","2521BL","261BL","331BL","334BL", "335BL", "336BL"),
+                  assembly="dlabrax2021",
+                  pipeline = "bismarkCytosineReport",
+                  treatment=c(0,0,0,0,1,1,1,1),
+                  context="CpG",
+                  mincov = 10)
+View(myobj.BL)
+
+
+#Brain
+#Object with 1x CpGs
+myobj.BR.nocoverage=methRead(sample_list_BR,
+                             sample.id=list("2510BR","2516BR","2521BR","261BR","331BR","334BR", "335BR", "336BR"),
+                             assembly="dlabrax2021",
+                             pipeline = "bismarkCytosineReport",
+                             treatment=c(0,0,0,0,1,1,1,1),
+                             context="CpG",
+                             mincov = 1)
+View(myobj.BR.nocoverage)
+
+#Object with 10x CpGs
+myobj.BR=methRead(sample_list_BR,
+                  sample.id=list("2510BR","2516BR","2521BR","261BR","331BR","334BR", "335BR", "336BR"),
+                  assembly="dlabrax2021",
+                  pipeline = "bismarkCytosineReport",
+                  treatment=c(0,0,0,0,1,1,1,1),
+                  context="CpG",
+                  mincov = 10)
+View(myobj.BR)
+
+
+#Gonad
+#Object with 1x CpGs
+myobj.GO.nocoverage=methRead(sample_list_GO,
+                             sample.id=list("2510G","2516G","2521G","261G","331G","334G", "335G", "336G"),
+                             assembly="dlabrax2021",
+                             pipeline = "bismarkCytosineReport",
+                             treatment=c(0,0,0,0,1,1,1,1),
+                             context="CpG",
+                             mincov = 1)
+View(myobj.GO.nocoverage)
+
+#Object with 10x CpGs
+myobj.GO=methRead(sample_list_GO,
+                  sample.id=list("2510G","2516G","2521G","261G","331G","334G", "335G", "336G"),
+                  assembly="dlabrax2021",
+                  pipeline = "bismarkCytosineReport",
+                  treatment=c(0,0,0,0,1,1,1,1),
+                  context="CpG",
+                  mincov = 10)
+View(myobj.GO)
+
+
+#Liver
+#Object with 1x CpGs
+myobj.LI.nocoverage=methRead(sample_list_LI,
+                             sample.id=list("2510LI","2516LI","2521LI","261LI","331LI","334LI", "335LI", "336LI"),
+                             assembly="dlabrax2021",
+                             pipeline = "bismarkCytosineReport",
+                             treatment=c(0,0,0,0,1,1,1,1),
+                             context="CpG",
+                             mincov = 1)
+View(myobj.LI.nocoverage)
+
+#Object with 10x CpGs
+myobj.LI=methRead(sample_list_LI,
+                  sample.id=list("2510LI","2516LI","2521LI","261LI","331LI","334LI", "335LI", "336LI"),
+                  assembly="dlabrax2021",
+                  pipeline = "bismarkCytosineReport",
+                  treatment=c(0,0,0,0,1,1,1,1),
+                  context="CpG",
+                  mincov = 10)
+View(myobj.LI)
+
+
+#Muscle
+#Object with 1x CpGs
+myobj.MU.nocoverage=methRead(sample_list_MU,
+                             sample.id=list("2510M","2516M","2521M","331M","334M", "335M", "336M"),
+                             assembly="dlabrax2021",
+                             pipeline = "bismarkCytosineReport",
+                             treatment=c(0,0,0,1,1,1,1),
+                             context="CpG",
+                             mincov = 1)
+View(myobj.MU.nocoverage)
+
+#Object with 10x CpGs
+myobj.MU=methRead(sample_list_MU,
+                  sample.id=list("2510M","2516M","2521M","331M","334M", "335M", "336M"),
+                  assembly="dlabrax2021",
+                  pipeline = "bismarkCytosineReport",
+                  treatment=c(0,0,0,1,1,1,1),
+                  context="CpG",
+                  mincov = 10)
+View(myobj.MU)
+
+```
+
+
+**IMPORTANT: make sure the IDs of the samples indicated in the object are in the same order as the inputted files from the list!!**
+
+These objects require further filtering. This filtering includes eliminating CpGs that have too much coverage (percentile 99.9) to avoid biases, and then a normalization of the results (with the median method) to account for different coverages per sample.
+```{r}
+#Filtering by percentile:
+#Blood:
+filtered.myobj.BL=filterByCoverage(myobj.BL,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+View(filtered.myobj.BL)
+
+#Brain:
+filtered.myobj.BR=filterByCoverage(myobj.BR,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+View(filtered.myobj.BR)
+
+#Gonad:
+filtered.myobj.GO=filterByCoverage(myobj.GO,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+View(filtered.myobj.GO)
+
+#Liver:
+filtered.myobj.LI=filterByCoverage(myobj.LI,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+View(filtered.myobj.LI)
+
+#Muscle:
+filtered.myobj.MU=filterByCoverage(myobj.MU,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+View(filtered.myobj.MU)
+
+```
+
+```{r}
+#Normalization:
+#Blood:
+normalized.myobj.BL=normalizeCoverage(filtered.myobj.BL,method="median")
+View(normalized.myobj.BL)
+
+#Brain:
+normalized.myobj.BR=normalizeCoverage(filtered.myobj.BR,method="median")
+View(normalized.myobj.BR)
+
+#Gonad:
+normalized.myobj.GO=normalizeCoverage(filtered.myobj.GO,method="median")
+View(normalized.myobj.GO)
+
+#Liver:
+normalized.myobj.LI=normalizeCoverage(filtered.myobj.LI,method="median")
+View(normalized.myobj.LI)
+
+#Muscle:
+normalized.myobj.MU=normalizeCoverage(filtered.myobj.MU,method="median")
+View(normalized.myobj.MU)
+
+```
+
+
+### Descriptive statistics on the samples
+
+This part has to be done individually per sample. To indicate which, in `normalized.myobj.sample_list` in the following instructions, indicate which item of the list is being called at a given time.
+
+The output of the **first** command is the basic stats about the data, among others, the coverage or % methylation. The output of the **second** command is a histogram for percent methylation distribution; typically, there should be two peaks on both ends (the location is either methylated or not). The output of the **third** command is also a histogram, with the coverage per base information; experiments suffering from PCR duplications will have a secondary peak on the right side of the histogram.
+```{r}
+#BLOOD
+ #Basic stats
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.BL[[i]], plot=FALSE, both.strands=FALSE)
+}
+
+ #Percent methylation in graph format
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.BL[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+ #Coverage per base in graph format
+for (i in 1:8) {
+  getCoverageStats(normalized.myobj.BL[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+```
+
+```{r}
+#BRAIN
+ #Basic stats
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.BR[[i]], plot=FALSE, both.strands=FALSE)
+}
+
+ #Percent methylation in graph format
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.BR[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+ #Coverage per base in graph format
+for (i in 1:8) {
+  getCoverageStats(normalized.myobj.BR[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+```
+
+```{r}
+#GONAD
+ #Basic stats
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.GO[[i]], plot=FALSE, both.strands=FALSE)
+}
+
+ #Percent methylation in graph format
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.GO[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+ #Coverage per base in graph format
+for (i in 1:8) {
+  getCoverageStats(normalized.myobj.GO[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+```
+
+```{r}
+#LIVER
+ #Basic stats
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.LI[[i]], plot=FALSE, both.strands=FALSE)
+}
+
+ #Percent methylation in graph format
+for (i in 1:8) {
+  getMethylationStats(normalized.myobj.LI[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+ #Coverage per base in graph format
+for (i in 1:8) {
+  getCoverageStats(normalized.myobj.LI[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+```
+
+```{r}
+#MUSCLE
+ #Basic stats
+for (i in 1:7) {
+  getMethylationStats(normalized.myobj.MU[[i]], plot=FALSE, both.strands=FALSE)
+}
+
+ #Percent methylation in graph format
+for (i in 1:7) {
+  getMethylationStats(normalized.myobj.MU[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+ #Coverage per base in graph format
+for (i in 1:7) {
+  getCoverageStats(normalized.myobj.MU[[i]], plot=TRUE, both.strands=FALSE)
+}
+
+```
+
+
+### Merging samples
+
+The next step is the creation of the methylBase object, used for comparative analysis. This is done with the function `unite`. It contains methylation information for regions or bases which are covered in all samples. We use `destrand = FALSE` to differentiate per strand. The output is a list of methylation location and a succession of coverage, C and T values per each member of the `myobj` list.
+
+_NOTE: The `unite` function produces bases and regions covered in ALL samples by default. To keep regions covered in only some of the samples, use the following instruction: `meth.min=unite(myobj,min.per.group=1L)`. However, take into account that this will result in a data frame with missing values._
+
+```{r}
+#BLOOD
+BL_all.meth=methylKit::unite(normalized.myobj.BL, destrand=FALSE, mc.cores = 1)  #depending on the processor the mc.cores can be changed
+  # We use destrand=TRUE because we do not need to take into account the strand where the DMC is located
+head(BL_all.meth)
+write.csv(as.data.frame(BL_all.meth), file="results/BL_all.meth.csv") #save a copy of the merge
+
+```
+
+```{r}
+#BRAIN
+BR_all.meth=methylKit::unite(normalized.myobj.BR, destrand=FALSE, mc.cores = 1)  #depending on the processor the mc.cores can be changed
+  # We use destrand=TRUE because we do not need to take into account the strand where the DMC is located
+head(BR_all.meth)
+write.csv(as.data.frame(BR_all.meth), file="results/BR_all.meth.csv") #save a copy of the merge
+
+```
+
+```{r}
+#GONAD
+GO_all.meth=unite(normalized.myobj.GO, destrand=FALSE, mc.cores = 1)  #depending on the processor the mc.cores can be changed
+  # We use destrand=TRUE because we do not need to take into account the strand where the DMC is located
+head(GO_all.meth)
+write.csv(as.data.frame(GO_all.meth), file="results/GO_all.meth.csv") #save a copy of the merge
+
+```
+
+```{r}
+#LIVER
+LI_all.meth=unite(normalized.myobj.LI, destrand=FALSE, mc.cores = 1)  #depending on the processor the mc.cores can be changed
+  # We use destrand=TRUE because we do not need to take into account the strand where the DMC is located
+head(LI_all.meth)
+write.csv(as.data.frame(LI_all.meth), file="results/LI_all.meth.csv") #save a copy of the merge
+
+```
+
+```{r}
+#MUSCLE
+MU_all.meth=unite(normalized.myobj.MU, destrand=FALSE, mc.cores = 1)  #depending on the processor the mc.cores can be changed
+  # We use destrand=TRUE because we do not need to take into account the strand where the DMC is located
+head(MU_all.meth)
+write.csv(as.data.frame(MU_all.meth), file="results/MU_all.meth.csv") #save a copy of the merge
+
+```
+
+
+### Differential methylation analysis
+
+The main function for this step is `calculateDiffMeth()`. When there is more than one sample per each condition (that is, when there are replicates present), the function automatically will follow logistic regression modeling and test. `difference=15` selects bases that have a % methylation difference larger than 15%. `qvalue=0.01` selects bases that have a q-value < 0.01.
+```{r}
+#Differential methylation calc
+BL_myDiff=calculateDiffMeth(BL_all.meth, mc.cores=1) #depending on the processor the mc.cores can be changed
+write.csv(as.data.frame(BL_myDiff), file="results/BL_diff.meth.csv")
+
+BR_myDiff=calculateDiffMeth(BR_all.meth, mc.cores=1)
+write.csv(as.data.frame(BR_myDiff), file="results/BR_diff.meth.csv")
+
+GO_myDiff=calculateDiffMeth(GO_all.meth, mc.cores=1)
+write.csv(as.data.frame(GO_myDiff), file="results/GO_diff.meth.csv")
+
+LI_myDiff=calculateDiffMeth(LI_all.meth, mc.cores=1)
+write.csv(as.data.frame(LI_myDiff), file="results/LI_diff.meth.csv")
+
+MU_myDiff=calculateDiffMeth(MU_all.meth, mc.cores=1)
+write.csv(as.data.frame(MU_myDiff), file="results/MU_diff.meth.csv")
+
+```
+
+```{r}
+# To get ALL differentially methylated bases
+
+# DIFF = 15%, q-val = 0.01
+BL_myDiff15.1=getMethylDiff(BL_myDiff,difference=15,qvalue=0.01)
+write.csv(as.data.frame(BL_myDiff15.1), file="results/BL_15.1_diff.meth.csv")
+
+BR_myDiff15.1=getMethylDiff(BR_myDiff,difference=15,qvalue=0.01)
+write.csv(as.data.frame(BR_myDiff15.1), file="results/BR_15.1_diff.meth.csv")
+
+GO_myDiff15.1=getMethylDiff(GO_myDiff,difference=15,qvalue=0.01)
+write.csv(as.data.frame(GO_myDiff15.1), file="results/GO_15.1_diff.meth.csv")
+
+LI_myDiff15.1=getMethylDiff(LI_myDiff,difference=15,qvalue=0.01)
+write.csv(as.data.frame(LI_myDiff15.1), file="results/LI_15.1_diff.meth.csv")
+
+MU_myDiff15.1=getMethylDiff(MU_myDiff,difference=15,qvalue=0.01)
+write.csv(as.data.frame(MU_myDiff15.1), file="results/MU_15.1_diff.meth.csv")
+
+```
+
+```{r}
+# To get HYPERMETHYLATED bases
+
+# DIFF = 15%, q-val = 0.01
+BL_myDiff15.1.hyper=getMethylDiff(BL_myDiff,difference=15,qvalue=0.01,type="hyper")
+write.csv(as.data.frame(BL_myDiff15.1.hyper), file="results/BL_15.1_diff.meth.hyper.csv")
+
+BR_myDiff15.1.hyper=getMethylDiff(BR_myDiff,difference=15,qvalue=0.01,type="hyper")
+write.csv(as.data.frame(BR_myDiff15.1.hyper), file="results/BR_15.1_diff.meth.hyper.csv")
+
+GO_myDiff15.1.hyper=getMethylDiff(GO_myDiff,difference=15,qvalue=0.01,type="hyper")
+write.csv(as.data.frame(GO_myDiff15.1.hyper), file="results/GO_15.1_diff.meth.hyper.csv")
+
+LI_myDiff15.1.hyper=getMethylDiff(LI_myDiff,difference=15,qvalue=0.01,type="hyper")
+write.csv(as.data.frame(LI_myDiff15.1.hyper), file="results/LI_15.1_diff.meth.hyper.csv")
+
+MU_myDiff15.1.hyper=getMethylDiff(MU_myDiff,difference=15,qvalue=0.01,type="hyper")
+write.csv(as.data.frame(MU_myDiff15.1.hyper), file="results/MU_15.1_diff.meth.hyper.csv")
+
+```
+
+```{r}
+# To get HYPOMETHYLATED bases
+
+# DIFF = 15%, q-val = 0.01
+BL_myDiff15.1.hypo=getMethylDiff(BL_myDiff,difference=15,qvalue=0.01,type="hypo")
+write.csv(as.data.frame(BL_myDiff15.1.hypo), file="results/BL_15.1_diff.meth.hypo.csv")
+
+BR_myDiff15.1.hypo=getMethylDiff(BR_myDiff,difference=15,qvalue=0.01,type="hypo")
+write.csv(as.data.frame(BR_myDiff15.1.hypo), file="results/BR_15.1_diff.meth.hypo.csv")
+
+GO_myDiff15.1.hypo=getMethylDiff(GO_myDiff,difference=15,qvalue=0.01,type="hypo")
+write.csv(as.data.frame(GO_myDiff15.1.hypo), file="results/GO_15.1_diff.meth.hypo.csv")
+
+LI_myDiff15.1.hypo=getMethylDiff(LI_myDiff,difference=15,qvalue=0.01,type="hypo")
+write.csv(as.data.frame(LI_myDiff15.1.hypo), file="results/LI_15.1_diff.meth.hypo.csv")
+
+MU_myDiff15.1.hypo=getMethylDiff(MU_myDiff,difference=15,qvalue=0.01,type="hypo")
+write.csv(as.data.frame(MU_myDiff15.1.hypo), file="results/MU_15.1_diff.meth.hypo.csv")
+
+```
+
+If needed, a correction for overdispersion and an account for covariates can be added to these instructions, but by default they are not applied.
+
+To visualize the (statistically significant) methylation change values, we plot an histogram per tissue with the calculated values:
+```{r}
+#BLOOD
+BL_myDiff_sig <- getMethylDiff(BL_myDiff,difference=0,qvalue=0.01) # We filter only by q < 0.01 to only plot the significant values regardless of methylation difference
+BL_df <- getData(BL_myDiff_sig) # We convert it to a data frame so ggplot2 can read the data
+
+Blood_hist_fig <- ggplot(BL_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "firebrick2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)), breaks = c(0,1300,2600,3900,5200,6500)) +
+  coord_capped_cart(xlim = c(-80,100),
+                    ylim = c(0,6500),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Blood_hist_fig
+
+ggsave("results/Diff_Blood_fig.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#BRAIN
+BR_myDiff_sig <- getMethylDiff(BR_myDiff,difference=0,qvalue=0.01)
+BR_df <- getData(BR_myDiff_sig)
+
+Brain_hist_fig <- ggplot(BR_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "yellow4") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  coord_capped_cart(xlim = c(-80,100),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Brain_hist_fig
+
+ggsave("results/Diff_Brain_fig.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#GONAD
+GO_myDiff_sig <- getMethylDiff(GO_myDiff,difference=0,qvalue=0.01)
+GO_df <- getData(GO_myDiff_sig)
+
+Gonad_hist_fig <- ggplot(GO_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "springgreen3") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  coord_capped_cart(xlim = c(-80,100),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Gonad_hist_fig
+
+ggsave("results/Diff_Gonad_fig.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#LIVER
+LI_myDiff_sig <- getMethylDiff(LI_myDiff,difference=0,qvalue=0.01)
+LI_df <- getData(LI_myDiff_sig)
+
+Liver_hist_fig <- ggplot(LI_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "dodgerblue2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  coord_capped_cart(xlim = c(-80,100),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Liver_hist_fig
+
+ggsave("results/Diff_Liver_fig.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#MUSCLE
+MU_myDiff_sig <- getMethylDiff(MU_myDiff,difference=0,qvalue=0.01)
+MU_df <- getData(MU_myDiff_sig)
+
+Muscle_hist_fig <- ggplot(MU_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "orchid2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)), breaks = c(0,3000,6000,9000)) +
+  coord_capped_cart(xlim = c(-80,100),
+                    ylim = c(0,9000),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Muscle_hist_fig
+
+ggsave("results/Diff_Muscle_fig.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+```
+
+To better compare the changes in methylation in each tissue as a count density plot, without any sort of filtering:
+```{r}
+BL_df <- getData(BL_myDiff) # Data frame so ggplot2 can read the data
+BR_df <- getData(BR_myDiff)
+GO_df <- getData(GO_myDiff)
+LI_df <- getData(LI_myDiff)
+MU_df <- getData(MU_myDiff)
+
+BL_df$meth.diff <- abs(BL_df$meth.diff) # Methyl difference data in absolute values to create the asymptotic graph
+BR_df$meth.diff <- abs(BR_df$meth.diff)
+GO_df$meth.diff <- abs(GO_df$meth.diff)
+LI_df$meth.diff <- abs(LI_df$meth.diff)
+MU_df$meth.diff <- abs(MU_df$meth.diff)
+
+BL_df$Tissue <- "Blood" # To color by tissue in the graph
+BR_df$Tissue <- "Brain"
+GO_df$Tissue <- "Gonad"
+LI_df$Tissue <- "Liver"
+MU_df$Tissue <- "Muscle"
+
+all_df <- rbind(BL_df, BR_df, GO_df, LI_df, MU_df)
+
+global <- ggplot(all_df, aes(x=all_df$meth.diff, color = all_df$Tissue)) +
+  geom_density(aes(y = ..count..), linewidth = 1.5) +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(limits = c(0,80), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80)) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+global
+
+ggsave("results/density_plots.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+```
+
+### q = 0.05
+To visualize the (statistically significant) methylation change values, we plot an histogram per tissue with q = 0.05:
+```{r}
+#BLOOD
+BL_myDiff_sig <- getMethylDiff(BL_myDiff,difference=0,qvalue=0.05) # We filter only by q < 0.05 to only plot the significant values regardless of methylation difference
+BL_df <- getData(BL_myDiff_sig) # We convert it to a data frame so ggplot2 can read the data
+
+Blood_hist_fig <- ggplot(BL_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "firebrick2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  coord_capped_cart(xlim = c(-80,100),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Blood_hist_fig
+
+ggsave("results/Diff_Blood_fig_5.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#BRAIN
+BR_myDiff_sig <- getMethylDiff(BR_myDiff,difference=0,qvalue=0.05)
+BR_df <- getData(BR_myDiff_sig)
+
+Brain_hist_fig <- ggplot(BR_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "yellow4") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)), breaks = c(0, 6000, 12000, 18000)) +
+  coord_capped_cart(xlim = c(-80,100),
+                    ylim = c(0,18000),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Brain_hist_fig
+
+ggsave("results/Diff_Brain_fig_5.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#GONAD
+GO_myDiff_sig <- getMethylDiff(GO_myDiff,difference=0,qvalue=0.05)
+GO_df <- getData(GO_myDiff_sig)
+
+Gonad_hist_fig <- ggplot(GO_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "springgreen3") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)), breaks = c(0, 1800,3600,5400,7200)) +
+  coord_capped_cart(xlim = c(-80,100),
+                    ylim = c(0,7200),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Gonad_hist_fig
+
+ggsave("results/Diff_Gonad_fig_5.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#LIVER
+LI_myDiff_sig <- getMethylDiff(LI_myDiff,difference=0,qvalue=0.05)
+LI_df <- getData(LI_myDiff_sig)
+
+Liver_hist_fig <- ggplot(LI_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "dodgerblue2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  coord_capped_cart(xlim = c(-80,100),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Liver_hist_fig
+
+ggsave("results/Diff_Liver_fig_5.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+
+#MUSCLE
+MU_myDiff_sig <- getMethylDiff(MU_myDiff,difference=0,qvalue=0.05)
+MU_df <- getData(MU_myDiff_sig)
+
+Muscle_hist_fig <- ggplot(MU_df, aes(x= meth.diff)) +
+  geom_histogram(color = "black", fill = "orchid2") +
+  labs(x = NULL,
+       y = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)), breaks = c(0,4000,8000,12000,16000)) +
+  coord_capped_cart(xlim = c(-80,100),
+                    ylim = c(0,16000),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+Muscle_hist_fig
+
+ggsave("results/Diff_Muscle_fig_5.png", plot=last_plot(), width = 2500, height = 2500, units = "px")
+
+```
+
+To better compare the changes in methylation in each tissue as a count density plot, filtering by q = 0.05. To do so, we need to count the number of methylated CpGs per bin of histogram and plot it using `geom_line` to visualize the lines, `geom_smooth` to connect them a bit more smoothly, and `scale_y_log10` to plot the data with a logarithmic y axis:
+```{r}
+# Blood counts
+BL_myDiff_sig <- getMethylDiff(BL_myDiff,difference=0,qvalue=0.05)
+BL_df <- getData(BL_myDiff_sig)
+BL_df$meth.diff <- abs(BL_df$meth.diff)
+BL_df <- mutate(BL_df, bin =
+                       ifelse((BL_df$meth.diff >= 0) & (BL_df$meth.diff < 5), "0",
+                       ifelse((BL_df$meth.diff >= 5) & (BL_df$meth.diff < 10), "5",
+                       ifelse((BL_df$meth.diff >= 10) & (BL_df$meth.diff < 15), "10",
+                       ifelse((BL_df$meth.diff >= 15) & (BL_df$meth.diff < 20), "15",
+                       ifelse((BL_df$meth.diff >= 20) & (BL_df$meth.diff < 25), "20",
+                       ifelse((BL_df$meth.diff >= 25) & (BL_df$meth.diff < 30), "25",
+                       ifelse((BL_df$meth.diff >= 30) & (BL_df$meth.diff < 35), "30",
+                       ifelse((BL_df$meth.diff >= 35) & (BL_df$meth.diff < 40), "35",
+                       ifelse((BL_df$meth.diff >= 40) & (BL_df$meth.diff < 45), "40",
+                       ifelse((BL_df$meth.diff >= 45) & (BL_df$meth.diff < 50), "45",
+                       ifelse((BL_df$meth.diff >= 50) & (BL_df$meth.diff < 55), "50",
+                       ifelse((BL_df$meth.diff >= 55) & (BL_df$meth.diff < 60), "55",
+                       ifelse((BL_df$meth.diff >= 60) & (BL_df$meth.diff < 65), "60",
+                       ifelse((BL_df$meth.diff >= 65) & (BL_df$meth.diff < 70), "65",
+                       ifelse((BL_df$meth.diff >= 70) & (BL_df$meth.diff < 75), "70",
+                       ifelse((BL_df$meth.diff >= 75) & (BL_df$meth.diff < 80), "75",
+                       ifelse((BL_df$meth.diff >= 80) & (BL_df$meth.diff < 85), "80",
+                       ifelse((BL_df$meth.diff >= 85) & (BL_df$meth.diff < 90), "85", "90")))))))))))))))))))
+
+BL_counts <- BL_df %>%
+  group_by(bin) %>%
+  summarize(BL = n())
+BL_counts$bin <- as.numeric(BL_counts$bin)
+BL_counts <- BL_counts %>% arrange(bin)
+
+
+# Brain counts
+BR_myDiff_sig <- getMethylDiff(BR_myDiff,difference=0,qvalue=0.05)
+BR_df <- getData(BR_myDiff_sig)
+BR_df$meth.diff <- abs(BR_df$meth.diff)
+BR_df <- mutate(BR_df, bin =
+                  ifelse((BR_df$meth.diff >= 0) & (BR_df$meth.diff < 5), "0",
+                  ifelse((BR_df$meth.diff >= 5) & (BR_df$meth.diff < 10), "5",
+                  ifelse((BR_df$meth.diff >= 10) & (BR_df$meth.diff < 15), "10",
+                  ifelse((BR_df$meth.diff >= 15) & (BR_df$meth.diff < 20), "15",
+                  ifelse((BR_df$meth.diff >= 20) & (BR_df$meth.diff < 25), "20",
+                  ifelse((BR_df$meth.diff >= 25) & (BR_df$meth.diff < 30), "25",
+                  ifelse((BR_df$meth.diff >= 30) & (BR_df$meth.diff < 35), "30",
+                  ifelse((BR_df$meth.diff >= 35) & (BR_df$meth.diff < 40), "35",
+                  ifelse((BR_df$meth.diff >= 40) & (BR_df$meth.diff < 45), "40",
+                  ifelse((BR_df$meth.diff >= 45) & (BR_df$meth.diff < 50), "45",
+                  ifelse((BR_df$meth.diff >= 50) & (BR_df$meth.diff < 55), "50",
+                  ifelse((BR_df$meth.diff >= 55) & (BR_df$meth.diff < 60), "55",
+                  ifelse((BR_df$meth.diff >= 60) & (BR_df$meth.diff < 65), "60", 
+                  ifelse((BR_df$meth.diff >= 65) & (BR_df$meth.diff < 70), "65",
+                  ifelse((BR_df$meth.diff >= 70) & (BR_df$meth.diff < 75), "70",
+                  ifelse((BR_df$meth.diff >= 75) & (BR_df$meth.diff < 80), "75",
+                  ifelse((BR_df$meth.diff >= 80) & (BR_df$meth.diff < 85), "80",
+                  ifelse((BR_df$meth.diff >= 85) & (BR_df$meth.diff < 90), "85", "90")))))))))))))))))))
+
+BR_counts <- BR_df %>%
+  group_by(bin) %>%
+  summarize(BR = n())
+BR_counts$bin <- as.numeric(BR_counts$bin)
+BR_counts <- BR_counts %>% arrange(bin)
+
+
+# Gonad counts
+GO_myDiff_sig <- getMethylDiff(GO_myDiff,difference=0,qvalue=0.05)
+GO_df <- getData(GO_myDiff_sig)
+GO_df$meth.diff <- abs(GO_df$meth.diff)
+GO_df <- mutate(GO_df, bin =
+                  ifelse((GO_df$meth.diff >= 0) & (GO_df$meth.diff < 5), "0",
+                  ifelse((GO_df$meth.diff >= 5) & (GO_df$meth.diff < 10), "5",
+                  ifelse((GO_df$meth.diff >= 10) & (GO_df$meth.diff < 15), "10",
+                  ifelse((GO_df$meth.diff >= 15) & (GO_df$meth.diff < 20), "15",
+                  ifelse((GO_df$meth.diff >= 20) & (GO_df$meth.diff < 25), "20",
+                  ifelse((GO_df$meth.diff >= 25) & (GO_df$meth.diff < 30), "25",
+                  ifelse((GO_df$meth.diff >= 30) & (GO_df$meth.diff < 35), "30",
+                  ifelse((GO_df$meth.diff >= 35) & (GO_df$meth.diff < 40), "35",
+                  ifelse((GO_df$meth.diff >= 40) & (GO_df$meth.diff < 45), "40",
+                  ifelse((GO_df$meth.diff >= 45) & (GO_df$meth.diff < 50), "45",
+                  ifelse((GO_df$meth.diff >= 50) & (GO_df$meth.diff < 55), "50",
+                  ifelse((GO_df$meth.diff >= 55) & (GO_df$meth.diff < 60), "55",
+                  ifelse((GO_df$meth.diff >= 60) & (GO_df$meth.diff < 65), "60", 
+                  ifelse((GO_df$meth.diff >= 65) & (GO_df$meth.diff < 70), "65",
+                  ifelse((GO_df$meth.diff >= 70) & (GO_df$meth.diff < 75), "70",           
+                  ifelse((GO_df$meth.diff >= 75) & (GO_df$meth.diff < 80), "75",
+                  ifelse((GO_df$meth.diff >= 80) & (GO_df$meth.diff < 85), "80",
+                  ifelse((GO_df$meth.diff >= 85) & (GO_df$meth.diff < 90), "85", "90")))))))))))))))))))
+
+GO_counts <- GO_df %>%
+  group_by(bin) %>%
+  summarize(GO = n())
+GO_counts$bin <- as.numeric(GO_counts$bin)
+GO_counts <- GO_counts %>% arrange(bin)
+
+
+# Liver counts
+LI_myDiff_sig <- getMethylDiff(LI_myDiff,difference=0,qvalue=0.05)
+LI_df <- getData(LI_myDiff_sig)
+LI_df$meth.diff <- abs(LI_df$meth.diff)
+LI_df <- mutate(LI_df, bin =
+                  ifelse((LI_df$meth.diff >= 0) & (LI_df$meth.diff < 5), "0",
+                  ifelse((LI_df$meth.diff >= 5) & (LI_df$meth.diff < 10), "5",
+                  ifelse((LI_df$meth.diff >= 10) & (LI_df$meth.diff < 15), "10",
+                  ifelse((LI_df$meth.diff >= 15) & (LI_df$meth.diff < 20), "15",
+                  ifelse((LI_df$meth.diff >= 20) & (LI_df$meth.diff < 25), "20",
+                  ifelse((LI_df$meth.diff >= 25) & (LI_df$meth.diff < 30), "25",
+                  ifelse((LI_df$meth.diff >= 30) & (LI_df$meth.diff < 35), "30",
+                  ifelse((LI_df$meth.diff >= 35) & (LI_df$meth.diff < 40), "35",
+                  ifelse((LI_df$meth.diff >= 40) & (LI_df$meth.diff < 45), "40",
+                  ifelse((LI_df$meth.diff >= 45) & (LI_df$meth.diff < 50), "45",
+                  ifelse((LI_df$meth.diff >= 50) & (LI_df$meth.diff < 55), "50",
+                  ifelse((LI_df$meth.diff >= 55) & (LI_df$meth.diff < 60), "55",
+                  ifelse((LI_df$meth.diff >= 60) & (LI_df$meth.diff < 65), "60", 
+                  ifelse((LI_df$meth.diff >= 65) & (LI_df$meth.diff < 70), "65",
+                  ifelse((LI_df$meth.diff >= 70) & (LI_df$meth.diff < 75), "70",           
+                  ifelse((LI_df$meth.diff >= 75) & (LI_df$meth.diff < 80), "75",
+                  ifelse((LI_df$meth.diff >= 80) & (LI_df$meth.diff < 85), "80",
+                  ifelse((LI_df$meth.diff >= 85) & (LI_df$meth.diff < 90), "85", "90")))))))))))))))))))
+
+LI_counts <- LI_df %>%
+  group_by(bin) %>%
+  summarize(LI = n())
+LI_counts$bin <- as.numeric(LI_counts$bin)
+LI_counts <- LI_counts %>% arrange(bin)
+
+
+# Muscle counts
+MU_myDiff_sig <- getMethylDiff(MU_myDiff,difference=0,qvalue=0.05)
+MU_df <- getData(MU_myDiff_sig)
+MU_df$meth.diff <- abs(MU_df$meth.diff)
+MU_df <- mutate(MU_df, bin =
+                  ifelse((MU_df$meth.diff >= 0) & (MU_df$meth.diff < 5), "0",
+                  ifelse((MU_df$meth.diff >= 5) & (MU_df$meth.diff < 10), "5",
+                  ifelse((MU_df$meth.diff >= 10) & (MU_df$meth.diff < 15), "10",
+                  ifelse((MU_df$meth.diff >= 15) & (MU_df$meth.diff < 20), "15",
+                  ifelse((MU_df$meth.diff >= 20) & (MU_df$meth.diff < 25), "20",
+                  ifelse((MU_df$meth.diff >= 25) & (MU_df$meth.diff < 30), "25",
+                  ifelse((MU_df$meth.diff >= 30) & (MU_df$meth.diff < 35), "30",
+                  ifelse((MU_df$meth.diff >= 35) & (MU_df$meth.diff < 40), "35",
+                  ifelse((MU_df$meth.diff >= 40) & (MU_df$meth.diff < 45), "40",
+                  ifelse((MU_df$meth.diff >= 45) & (MU_df$meth.diff < 50), "45",
+                  ifelse((MU_df$meth.diff >= 50) & (MU_df$meth.diff < 55), "50",
+                  ifelse((MU_df$meth.diff >= 55) & (MU_df$meth.diff < 60), "55",
+                  ifelse((MU_df$meth.diff >= 60) & (MU_df$meth.diff < 65), "60", 
+                  ifelse((MU_df$meth.diff >= 65) & (MU_df$meth.diff < 70), "65",
+                  ifelse((MU_df$meth.diff >= 70) & (MU_df$meth.diff < 75), "70",           
+                  ifelse((MU_df$meth.diff >= 75) & (MU_df$meth.diff < 80), "75",
+                  ifelse((MU_df$meth.diff >= 80) & (MU_df$meth.diff < 85), "80",
+                  ifelse((MU_df$meth.diff >= 85) & (MU_df$meth.diff < 90), "85", "90")))))))))))))))))))
+
+MU_counts <- MU_df %>%
+  group_by(bin) %>%
+  summarize(MU = n())
+MU_counts$bin <- as.numeric(MU_counts$bin)
+MU_counts <- MU_counts %>% arrange(bin)
+
+
+# Merging counts
+merge <- merge(BL_counts, BR_counts, by = "bin", all.x = TRUE, all.y = TRUE)
+merge <- merge(merge, GO_counts, by = "bin", all.x = TRUE, all.y = TRUE)
+merge <- merge(merge, LI_counts, by = "bin", all.x = TRUE, all.y = TRUE)
+merge <- merge(merge, MU_counts, by = "bin", all.x = TRUE, all.y = TRUE)
+merge <- as.data.frame(merge)
+write.csv(as.data.frame(merge), file="results/count_CpG.csv")
+
+
+# Line plot
+global <- ggplot() +
+  geom_line(data = merge, aes(x = merge$bin, y = merge$BL), group = 1, linewidth = 1.5, color = "firebrick2") +
+  geom_line(data = merge, aes(x = merge$bin, y = merge$BR), group = 1, linewidth = 1.5, color = "yellow4") +
+  geom_line(data = merge, aes(x = merge$bin, y = merge$GO), group = 1, linewidth = 1.5, color = "springgreen3") +
+  geom_line(data = merge, aes(x = merge$bin, y = merge$LI), group = 1, linewidth = 1.5, color = "dodgerblue2") +
+  geom_line(data = merge, aes(x = merge$bin, y = merge$MU), group = 1, linewidth = 1.5, color = "orchid2") +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85,90)) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/density_plots_5_merge.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+
+# Smooth line plot
+global <- ggplot() +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$BL), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "firebrick2") +  # span = 0.3 makes sure all points are considered when tracing the smoothened line
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$BR), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "yellow4") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$GO), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "springgreen3") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$LI), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "dodgerblue2") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$MU), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "orchid2") +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90)) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1, color="black"),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/density_plots_5_merge_smooth.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+
+# Logarithmic plot
+merge_2 <- merge
+merge_2[is.na(merge_2)] <- 1# conversion to visualize better that the liver goes up to 90
+
+global <- ggplot() +
+  geom_line(data = merge_2, aes(x = merge_2$bin, y = merge_2$BR), group = 1, linewidth = 2, color = "yellow4") +
+  geom_line(data = merge_2, aes(x = merge_2$bin, y = merge_2$GO), group = 1, linewidth = 2, color = "springgreen3") +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs (log scale)") +
+  scale_y_log10(expand = expansion(mult = c(0, .1)), breaks = c(1, 10, 100, 1000, 10000, 100000)) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90)) +
+  coord_capped_cart(ylim = c(1,100000),
+                    top = waiver()) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1, color="black"),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent')) +
+  geom_line(data = merge_2, aes(x = merge_2$bin, y = merge_2$BL), group = 1, linewidth = 2, color = "firebrick2") +
+  geom_line(data = merge_2, aes(x = merge_2$bin, y = merge_2$MU), group = 1, linewidth = 2, color = "orchid2") +
+  geom_line(data = merge_2, aes(x = merge_2$bin, y = merge_2$LI), group = 1, linewidth = 2, color = "dodgerblue2")
+  
+
+ggsave("results/density_plots_5_merge_log.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+
+# Smooth log plot
+global <- ggplot() +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$BR), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "yellow4") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$GO), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "springgreen3") +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs (log scale)") +
+  scale_y_log10(expand = expansion(mult = c(0, .1)), breaks = c(1, 10, 100, 1000, 10000, 100000)) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90)) +
+  coord_capped_cart(ylim = c(1,100000),
+                    top = waiver()) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1, color="black"),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent')) +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$BL), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "firebrick2") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$MU), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "orchid2") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$LI), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "dodgerblue2")
+
+ggsave("results/density_plots_5_merge_log_smooth.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+
+# To represent the graphs with the mean count values overall:
+merge$Means <-apply(merge[,2:6],1,mean)
+
+global <- ggplot() +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$BL), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "firebrick2") +  # span = 0.3 makes sure all points are considered when tracing the line
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$BR), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "yellow4") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$GO), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "springgreen3") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$LI), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "dodgerblue2") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$MU), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "orchid2") +
+  geom_smooth(data = merge, aes(x = merge$bin, y = merge$Means), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "black", linetype = 2) +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90)) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1, color="black"),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent'))
+
+global
+
+ggsave("results/density_plots_5_merge_smooth_mean.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+
+merge_2$Means <-apply(merge_2[,2:6],1,mean)
+
+global <- ggplot() +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$BR), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "yellow4") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$GO), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "springgreen3") +
+  geom_smooth(data = merge_2, aes(x = merge$bin, y = merge$Means), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "black", linetype = 2) +
+  labs(x = "Methylation difference (%)",
+       y = "Number of CpGs (log scale)") +
+  scale_y_log10(expand = expansion(mult = c(0, .1)), breaks = c(1, 10, 100, 1000, 10000, 100000)) +
+  scale_x_continuous(limits = c(0,90), breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90)) +
+  coord_capped_cart(ylim = c(1,100000),
+                    top = waiver()) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1, color="black"),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        guide_axis(check.overlap = TRUE),
+        panel.background = element_rect(fill='transparent')) +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$BL), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "firebrick2") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$MU), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "orchid2") +
+  geom_smooth(data = merge_2, aes(x = merge_2$bin, y = merge_2$LI), method = "loess", span = 0.3, se = FALSE, linewidth = 2, color = "dodgerblue2")
+
+ggsave("results/density_plots_5_merge_log_smooth_mean.png", plot=last_plot(), width = 5000, height = 3000, units = "px")
+
+```
+
+
+## COMPARATIVE ANALYSIS
+
+### Global PCA plot
+
+To ensure there is no batch effect and to visualize the differences between control and treated samples we create a PCA plot with the methylation file.
+
+To compare all samples we need to create a new list with all the samples regardless of tissue, and repeat the analysis up until the methylation difference calculation. Samples should cluster per tissue.
+```{r}
+sample_list_ALL=list(system.file("extdata/stress_data", "2510BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2516BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2521BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "261BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "331BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "334BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "335BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "336BL_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2510BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2516BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2521BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "261BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "331BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "334BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "335BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "336BR_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2510G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2516G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2521G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "261G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "331G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "334G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "335G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "336G_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2510LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2516LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2521LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "261LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "331LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "334LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "335LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "336LI_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2510M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2516M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "2521M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "331M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "334M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "335M_CpG_report.txt", package = "methylKit"),
+                     system.file("extdata/stress_data", "336M_CpG_report.txt", package = "methylKit"))
+
+myobj.ALL=methRead(sample_list_ALL,
+                   sample.id=list("2510BL","2516BL","2521BL","261BL","331BL","334BL", "335BL", "336BL", "2510BR","2516BR","2521BR","261BR","331BR","334BR", "335BR", "336BR", "2510G","2516G","2521G","261G","331G","334G", "335G", "336G", "2510LI","2516LI","2521LI","261LI","331LI","334LI", "335LI", "336LI", "2510M","2516M","2521M","331M","334M", "335M", "336M"),
+                   assembly="dlabrax2021",
+                   pipeline = "bismarkCytosineReport",
+                   treatment=c(0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,1,1,1,1),
+                   context="CpG",
+                   mincov = 10)
+
+filtered.myobj.ALL=filterByCoverage(myobj.ALL,lo.count=10,lo.perc=NULL,hi.count=NULL,hi.perc=99.9)
+normalized.myobj.ALL=normalizeCoverage(filtered.myobj.ALL,method="median")
+
+All.meth=unite(normalized.myobj.ALL, destrand=FALSE, mc.cores = 1)
+write.csv(as.data.frame(All.meth), file="results/All.meth.csv")
+
+All_myDiff=calculateDiffMeth(All.meth, mc.cores=1) #depending on the processor the mc.cores can be changed
+write.csv(as.data.frame(All_myDiff), file="results/All_diff.meth.csv")
+
+```
+
+```{r}
+#To perform the PCA and obtain the variance of each component:
+PCA.ALL <- PCASamples(All.meth, obj.return = TRUE)
+PCA_plot <- as.data.frame(PCA.ALL$x)
+PCA_plot$Sample <- rownames(PCA_plot) # to later label the points in the plot
+PCA_plot$Tissue <- c("Blood", "Blood", "Blood", "Blood", "Blood", "Blood", "Blood", "Blood", "Brain", "Brain", "Brain", "Brain", "Brain", "Brain", "Brain", "Brain", "Gonad", "Gonad", "Gonad", "Gonad", "Gonad", "Gonad", "Gonad", "Gonad", "Liver", "Liver", "Liver", "Liver", "Liver", "Liver", "Liver", "Liver", "Muscle", "Muscle", "Muscle", "Muscle", "Muscle", "Muscle", "Muscle") # to later color the points in the plot
+PCA_plot_variance <- PCA.ALL$sdev^2 / sum(PCA.ALL$sdev^2)
+PCA_plot_variance <- round(PCA_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Blood = "firebrick2", Brain = "yellow4", Gonad = "springgreen3", Liver = "dodgerblue2", Muscle = "orchid2")
+ggplot(PCA_plot, aes(x = PC1, y = PC2, label = Sample, color=Tissue)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  labs(x = paste0("PC1 (", PCA_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.85,0.22),
+        legend.title = element_text(size = 26),
+        legend.text = element_text(size = 24),
+        legend.box.background = element_rect(linewidth = 1, linetype = 1, color = "black", fill = "white"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+
+### By tissue PCA plots
+```{r}
+#BLOOD
+PCA.BL <- PCASamples(BL_all.meth, obj.return = TRUE)
+PCA.BL_plot <- as.data.frame(PCA.BL$x)
+PCA.BL_plot$Sample <- rownames(PCA.BL_plot) # to later label the points in the plot
+PCA.BL_plot$Treatment <- c("Control", "Control", "Control", "Control", "Stress", "Stress", "Stress", "Stress") # to later color the points in the plot
+PCA.BL_plot_variance <- PCA.BL$sdev^2 / sum(PCA.BL$sdev^2)
+PCA.BL_plot_variance <- round(PCA.BL_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Control = "firebrick2", Stress = "firebrick2")
+ggplot(PCA.BL_plot, aes(x = PC1, y = PC2, label = Sample, shape=Treatment, color = Treatment)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  geom_text(vjust = -1, size = 6, show.legend = FALSE) +
+  xlim (-300, 400) +
+  ylim (-250, 350) +
+  labs(x = paste0("PC1 (", PCA.BL_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA.BL_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.80,0.18),
+        legend.title = element_text(size = 30),
+        legend.text = element_text(size = 28),
+        legend.box.background = element_rect(linewidth = 1, colour = "black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA_BL.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+```{r}
+#BRAIN
+PCA.BR <- PCASamples(BR_all.meth, obj.return = TRUE)
+PCA.BR_plot <- as.data.frame(PCA.BR$x)
+PCA.BR_plot$Sample <- rownames(PCA.BR_plot) # to later label the points in the plot
+PCA.BR_plot$Treatment <- c("Control", "Control", "Control", "Control", "Stress", "Stress", "Stress", "Stress") # to later color the points in the plot
+PCA.BR_plot_variance <- PCA.BR$sdev^2 / sum(PCA.BR$sdev^2)
+PCA.BR_plot_variance <- round(PCA.BR_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Control = "yellow4", Stress = "yellow4")
+ggplot(PCA.BR_plot, aes(x = PC1, y = PC2, label = Sample, color=Treatment, shape = Treatment)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  geom_text(vjust = -1, size = 6, show.legend = FALSE) +
+  xlim (-400, 300) +
+  ylim (-250, 400) +
+  labs(x = paste0("PC1 (", PCA.BR_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA.BR_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.18),
+        legend.title = element_text(size = 30),
+        legend.text = element_text(size = 28),
+        legend.box.background = element_rect(linewidth = 1, colour = "black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA_BR.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+```{r}
+#GONAD
+PCA.GO <- PCASamples(GO_all.meth, obj.return = TRUE)
+PCA.GO_plot <- as.data.frame(PCA.GO$x)
+PCA.GO_plot$Sample <- rownames(PCA.GO_plot) # to later label the points in the plot
+PCA.GO_plot$Treatment <- c("Control", "Control", "Control", "Control", "Stress", "Stress", "Stress", "Stress") # to later color the points in the plot
+PCA.GO_plot_variance <- PCA.GO$sdev^2 / sum(PCA.GO$sdev^2)
+PCA.GO_plot_variance <- round(PCA.GO_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Control = "springgreen3", Stress = "springgreen3")
+ggplot(PCA.GO_plot, aes(x = PC1, y = PC2, label = Sample, color=Treatment, shape = Treatment)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  geom_text(vjust = -1, size = 6, show.legend = FALSE) +
+  xlim (-300, 300) +
+  ylim (-350, 350) +
+  labs(x = paste0("PC1 (", PCA.GO_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA.GO_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.80,0.85),
+        legend.title = element_text(size = 30),
+        legend.text = element_text(size = 28),
+        legend.box.background = element_rect(linewidth = 1, colour = "black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA_GO.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+```{r}
+#LIVER
+PCA.LI <- PCASamples(LI_all.meth, obj.return = TRUE)
+PCA.LI_plot <- as.data.frame(PCA.LI$x)
+PCA.LI_plot$Sample <- rownames(PCA.LI_plot) # to later label the points in the plot
+PCA.LI_plot$Treatment <- c("Control", "Control", "Control", "Control", "Stress", "Stress", "Stress", "Stress") # to later color the points in the plot
+PCA.LI_plot_variance <- PCA.LI$sdev^2 / sum(PCA.LI$sdev^2)
+PCA.LI_plot_variance <- round(PCA.LI_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Control = "dodgerblue2", Stress = "dodgerblue2")
+ggplot(PCA.LI_plot, aes(x = PC1, y = PC2, label = Sample, color=Treatment, shape = Treatment)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  geom_text(vjust = -1, size = 6, show.legend = FALSE) +
+  xlim (-250, 350) +
+  ylim (-350, 300) +
+  labs(x = paste0("PC1 (", PCA.LI_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA.LI_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.80,0.18),
+        legend.title = element_text(size = 30),
+        legend.text = element_text(size = 28),
+        legend.box.background = element_rect(linewidth = 1, colour = "black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA_LI.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+```{r}
+#MUSCLE
+PCA.MU <- PCASamples(MU_all.meth, obj.return = TRUE)
+PCA.MU_plot <- as.data.frame(PCA.MU$x)
+PCA.MU_plot$Sample <- rownames(PCA.MU_plot) # to later label the points in the plot
+PCA.MU_plot$Treatment <- c("Control", "Control", "Control", "Stress", "Stress", "Stress", "Stress") # to later color the points in the plot
+PCA.MU_plot_variance <- PCA.MU$sdev^2 / sum(PCA.MU$sdev^2)
+PCA.MU_plot_variance <- round(PCA.MU_plot_variance * 100, 2) 
+
+#To plot the PCA:
+group.colors <- c(Control = "orchid2", Stress = "orchid2")
+ggplot(PCA.MU_plot, aes(x = PC1, y = PC2, label = Sample, color=Treatment, shape = Treatment)) +
+  scale_color_manual(values=group.colors) +
+  geom_point(size = 6) +
+  geom_text(vjust = -1, size = 6, show.legend = FALSE) +
+  xlim (-300, 400) +
+  ylim (-200, 350) +
+  labs(x = paste0("PC1 (", PCA.MU_plot_variance[1], "% variance)"),
+       y = paste0("PC2 (", PCA.MU_plot_variance[2], "% variance)")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.80,0.18),
+        legend.title = element_text(size = 30),
+        legend.text = element_text(size = 28),
+        legend.box.background = element_rect(linewidth = 1, colour = "black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.text.x = element_text(size = 36, color="black"),
+        axis.text.y = element_text(size = 36, color="black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("results/PCA_MU.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+```
+
+
+## OVERLAP CALCULATION
+
+To find the common CpG sites between tissues we have to merge the corresponding datasets by chromosome, location (indicated in our data by the start site), and strand. Firstly, the object needs to be converted to a data frame; this is achieved with the instruction `getData` as seen earlier. Then, the merge is made with base R instructions and the result is saved in csv format for further analysis. The we use the `nrow` function to count the instances in which the pattern varies in the same way or different way. Make sure to record the results printed by `cat` in a separate excel sheet.
+```{r}
+# ALL DMC
+# Converting to dataframes
+BL_myDiff15.1_df <- getData(BL_myDiff15.1)
+BR_myDiff15.1_df <- getData(BR_myDiff15.1)
+GO_myDiff15.1_df <- getData(GO_myDiff15.1)
+LI_myDiff15.1_df <- getData(LI_myDiff15.1)
+MU_myDiff15.1_df <- getData(MU_myDiff15.1)
+
+# Removing uninformative columns
+BL_myDiff15.1_df <- BL_myDiff15.1_df[,-3]
+BR_myDiff15.1_df <- BR_myDiff15.1_df[,-3]
+GO_myDiff15.1_df <- GO_myDiff15.1_df[,-3]
+LI_myDiff15.1_df <- LI_myDiff15.1_df[,-3]
+MU_myDiff15.1_df <- MU_myDiff15.1_df[,-3]
+
+# Adding "Pattern" column (to differentiate hypo- from hypermethylated)
+BL_myDiff15.1_df$Pattern <- ifelse(BL_myDiff15.1_df$meth.diff > 0, "Hyper", "Hypo")
+BR_myDiff15.1_df$Pattern <- ifelse(BR_myDiff15.1_df$meth.diff > 0, "Hyper", "Hypo")
+GO_myDiff15.1_df$Pattern <- ifelse(GO_myDiff15.1_df$meth.diff > 0, "Hyper", "Hypo")
+LI_myDiff15.1_df$Pattern <- ifelse(LI_myDiff15.1_df$meth.diff > 0, "Hyper", "Hypo")
+MU_myDiff15.1_df$Pattern <- ifelse(MU_myDiff15.1_df$meth.diff > 0, "Hyper", "Hypo")
+
+
+# Overlap calculation
+BL_BR_15.1 <- merge(BL_myDiff15.1_df,BR_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BL_BR_15.1, file="results/overlaps/BL_vs_BR_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BL_BR_15.1[BL_BR_15.1$Pattern.x == "Hyper" & BL_BR_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BL_BR_15.1[BL_BR_15.1$Pattern.x == "Hypo" & BL_BR_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BL_BR_15.1[BL_BR_15.1$Pattern.x == "Hyper" & BL_BR_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BL_BR_15.1[BL_BR_15.1$Pattern.x == "Hypo" & BL_BR_15.1$Pattern.y == "Hyper", ])))
+
+
+BL_GO_15.1 <- merge(BL_myDiff15.1_df,GO_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BL_GO_15.1, file="results/overlaps/BL_vs_GO_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BL_GO_15.1[BL_GO_15.1$Pattern.x == "Hyper" & BL_GO_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BL_GO_15.1[BL_GO_15.1$Pattern.x == "Hypo" & BL_GO_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BL_GO_15.1[BL_GO_15.1$Pattern.x == "Hyper" & BL_GO_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BL_GO_15.1[BL_GO_15.1$Pattern.x == "Hypo" & BL_GO_15.1$Pattern.y == "Hyper", ])))
+
+
+BL_LI_15.1 <- merge(BL_myDiff15.1_df,LI_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BL_LI_15.1, file="results/overlaps/BL_vs_LI_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BL_LI_15.1[BL_LI_15.1$Pattern.x == "Hyper" & BL_LI_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BL_LI_15.1[BL_LI_15.1$Pattern.x == "Hypo" & BL_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BL_LI_15.1[BL_LI_15.1$Pattern.x == "Hyper" & BL_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BL_LI_15.1[BL_LI_15.1$Pattern.x == "Hypo" & BL_LI_15.1$Pattern.y == "Hyper", ])))
+
+
+BL_MU_15.1 <- merge(BL_myDiff15.1_df,MU_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BL_MU_15.1, file="results/overlaps/BL_vs_MU_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BL_MU_15.1[BL_MU_15.1$Pattern.x == "Hyper" & BL_MU_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BL_MU_15.1[BL_MU_15.1$Pattern.x == "Hypo" & BL_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BL_MU_15.1[BL_MU_15.1$Pattern.x == "Hyper" & BL_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BL_MU_15.1[BL_MU_15.1$Pattern.x == "Hypo" & BL_MU_15.1$Pattern.y == "Hyper", ])))
+
+
+BR_GO_15.1 <- merge(BR_myDiff15.1_df,GO_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BR_GO_15.1, file="results/overlaps/BR_vs_GO_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BR_GO_15.1[BR_GO_15.1$Pattern.x == "Hyper" & BR_GO_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BR_GO_15.1[BR_GO_15.1$Pattern.x == "Hypo" & BR_GO_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BR_GO_15.1[BR_GO_15.1$Pattern.x == "Hyper" & BR_GO_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BR_GO_15.1[BR_GO_15.1$Pattern.x == "Hypo" & BR_GO_15.1$Pattern.y == "Hyper", ])))
+
+
+BR_LI_15.1 <- merge(BR_myDiff15.1_df,LI_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BR_LI_15.1, file="results/overlaps/BR_vs_LI_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BR_LI_15.1[BR_LI_15.1$Pattern.x == "Hyper" & BR_LI_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BR_LI_15.1[BR_LI_15.1$Pattern.x == "Hypo" & BR_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BR_LI_15.1[BR_LI_15.1$Pattern.x == "Hyper" & BR_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BR_LI_15.1[BR_LI_15.1$Pattern.x == "Hypo" & BR_LI_15.1$Pattern.y == "Hyper", ])))
+
+
+BR_MU_15.1 <- merge(BR_myDiff15.1_df,MU_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(BR_MU_15.1, file="results/overlaps/BR_vs_MU_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(BR_MU_15.1[BR_MU_15.1$Pattern.x == "Hyper" & BR_MU_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(BR_MU_15.1[BR_MU_15.1$Pattern.x == "Hypo" & BR_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(BR_MU_15.1[BR_MU_15.1$Pattern.x == "Hyper" & BR_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(BR_MU_15.1[BR_MU_15.1$Pattern.x == "Hypo" & BR_MU_15.1$Pattern.y == "Hyper", ])))
+
+
+GO_LI_15.1 <- merge(GO_myDiff15.1_df,LI_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(GO_LI_15.1, file="results/overlaps/GO_vs_LI_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(GO_LI_15.1[GO_LI_15.1$Pattern.x == "Hyper" & GO_LI_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(GO_LI_15.1[GO_LI_15.1$Pattern.x == "Hypo" & GO_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(GO_LI_15.1[GO_LI_15.1$Pattern.x == "Hyper" & GO_LI_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(GO_LI_15.1[GO_LI_15.1$Pattern.x == "Hypo" & GO_LI_15.1$Pattern.y == "Hyper", ])))
+
+
+GO_MU_15.1 <- merge(GO_myDiff15.1_df,MU_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(GO_MU_15.1, file="results/overlaps/GO_vs_MU_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(GO_MU_15.1[GO_MU_15.1$Pattern.x == "Hyper" & GO_MU_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(GO_MU_15.1[GO_MU_15.1$Pattern.x == "Hypo" & GO_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(GO_MU_15.1[GO_MU_15.1$Pattern.x == "Hyper" & GO_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(GO_MU_15.1[GO_MU_15.1$Pattern.x == "Hypo" & GO_MU_15.1$Pattern.y == "Hyper", ])))
+
+
+LI_MU_15.1 <- merge(LI_myDiff15.1_df,MU_myDiff15.1_df, by=c("chr", "start", "strand"))
+write.csv(LI_MU_15.1, file="results/overlaps/LI_vs_MU_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(LI_MU_15.1[LI_MU_15.1$Pattern.x == "Hyper" & LI_MU_15.1$Pattern.y == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(LI_MU_15.1[LI_MU_15.1$Pattern.x == "Hypo" & LI_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hyper-hypomethylated = ", print(nrow(LI_MU_15.1[LI_MU_15.1$Pattern.x == "Hyper" & LI_MU_15.1$Pattern.y == "Hypo", ])))
+cat("Discordant hypo-hypermethylated = ", print(nrow(LI_MU_15.1[LI_MU_15.1$Pattern.x == "Hypo" & LI_MU_15.1$Pattern.y == "Hyper", ])))
+
+
+# To find overlaps in ALL tissues:
+All_15.1 <- inner_join(BL_myDiff15.1_df, BR_myDiff15.1_df, by=c("chr", "start", "strand"))
+All_15.1 <- inner_join(All_15.1, GO_myDiff15.1_df, by=c("chr", "start", "strand"))
+All_15.1 <- inner_join(All_15.1, LI_myDiff15.1_df, by=c("chr", "start", "strand"))
+All_15.1 <- inner_join(All_15.1, MU_myDiff15.1_df, by=c("chr", "start", "strand"))
+colnames(All_15.1) <- c("chr", "start", "strand", "pvalue_BL", "qvalue_BL", "meth.diff_BL", "Pattern_BL", "pvalue_BR", "qvalue_BR", "meth.diff_BR", "Pattern_BR", "pvalue_GO", "qvalue_GO", "meth.diff_GO", "Pattern_GO", "pvalue_LI", "qvalue_LI", "meth.diff_LI", "Pattern_LI", "pvalue_MU", "qvalue_MU", "meth.diff_MU", "Pattern_MU")
+write.csv(All_15.1, file="results/overlaps/All_15.1.csv")
+cat("Concordant hypermethylated = ", print(nrow(All_15.1[All_15.1$Pattern_BL == "Hyper" & All_15.1$Pattern_BR == "Hyper" & All_15.1$Pattern_GO == "Hyper" & All_15.1$Pattern_LI == "Hyper" & All_15.1$Pattern_MU == "Hyper", ])))
+cat("Concordant hypomethylated = ", print(nrow(All_15.1[All_15.1$Pattern_BL == "Hypo" & All_15.1$Pattern_BR == "Hypo" & All_15.1$Pattern_GO == "Hypo" & All_15.1$Pattern_LI == "Hypo" & All_15.1$Pattern_MU == "Hypo", ])))
+
+All_15.1_filtered <- All_15.1[,c(1:3,7,11,15,19,23)]  # For a better comparison between tissue trends
+
+```
+
+In order to create the Venn diagram we are going to use the [Bioinformatics & Evolutionary Genomics webpage](https://bioinformatics.psb.ugent.be/webtools/Venn/). The data must be prepared as follows:
+```{r}
+Venn_BL <- BL_myDiff15.1_df[,1:3]
+rownames(Venn_BL) <- rownames(NULL)
+colnames(Venn_BL) <- colnames(NULL)
+write.table(Venn_BL,"results/overlaps/Venn_BL.txt", sep="\t",row.names=FALSE)
+
+Venn_BR <- BR_myDiff15.1_df[,1:3]
+rownames(Venn_BR) <- rownames(NULL)
+colnames(Venn_BR) <- colnames(NULL)
+write.table(Venn_BR,"results/overlaps/Venn_BR.txt", sep="\t",row.names=FALSE)
+
+Venn_GO <- GO_myDiff15.1_df[,1:3]
+rownames(Venn_GO) <- rownames(NULL)
+colnames(Venn_GO) <- colnames(NULL)
+write.table(Venn_GO,"results/overlaps/Venn_GO.txt", sep="\t",row.names=FALSE)
+
+Venn_LI <- LI_myDiff15.1_df[,1:3]
+rownames(Venn_LI) <- rownames(NULL)
+colnames(Venn_LI) <- colnames(NULL)
+write.table(Venn_LI,"results/overlaps/Venn_LI.txt", sep="\t",row.names=FALSE)
+
+Venn_MU <- MU_myDiff15.1_df[,1:3]
+rownames(Venn_MU) <- rownames(NULL)
+colnames(Venn_MU) <- colnames(NULL)
+write.table(Venn_MU,"results/overlaps/Venn_MU.txt", sep="\t",row.names=FALSE)
+
+```
+
+
+## PERMUTATIONS TEST
+
+To check whether these overlaps are due to chance, we perform a permutation test. In our case, the null hypothesis (H0) states that the number of overlaps we found does not differ from a number of overlaps calculated from random sets of DMC; that is, that both tissues compared are independent, have different regulation pathways and any overlap we find between them has no biological meaning. The alternate hypothesis (H1), therefore, would imply that the number of overlaps we found is too high to have ocurred by chance, and thus, that it has a biological meaning.
+
+We do this test by randomly selecting from the total CpGs (common between samples) a number of rows equal to the amount of DMCs calculated, for two different tissues, and calculating the number of overlaps we find in this selection. This test is repeated 10.000 times, and then the p-value is calculated with the number of overlaps that we found with our data.
+
+We need to perform this test for each pair of datasets to confirm that the overlap found between them is not random. If this turns out to be the case, the overlaps between all tissues will also be non-random.
+
+```{r}
+# We convert the total CpG population into a dataframe
+BL_myDiff_df <- getData(BL_myDiff)
+BR_myDiff_df <- getData(BR_myDiff)
+GO_myDiff_df <- getData(GO_myDiff)
+LI_myDiff_df <- getData(LI_myDiff)
+MU_myDiff_df <- getData(MU_myDiff)
+
+x <- c(1:10000)  # For the repetition loop
+
+# BL vs BR
+Overlaps <- "Overlaps"  # We create vector (by adding a random element) to compile the calculated overlaps
+
+for (i in x){
+BL_repeat <- BL_myDiff_df[sample(nrow(BL_myDiff_df), 4924, replace = FALSE), ]; BR_repeat <- BR_myDiff_df[sample(nrow(BR_myDiff_df), 7102, replace = FALSE), ]; Overlaps_repeat <- merge(BL_repeat,BR_repeat, by=c("chr", "start", "strand")); Ov_rep <- nrow(Overlaps_repeat); Overlaps <- append(Overlaps, Ov_rep)
+}
+
+Overlaps <- Overlaps[!Overlaps == 'Overlaps']  # Eliminate character element from the Overlaps vector
+Perm_BL_BR <- data.frame(x, Overlaps)  # Convert vector to dataframe for easy downstream use
+Perm_BL_BR$Overlaps <- as.numeric(Perm_BL_BR$Overlaps)
+summary(Perm_BL_BR$Overlaps)
+
+# Calculation of p-value
+  # Formula: p-val = (sum(permuted overlaps >= observed overlaps) +1) / (length(permuted overlaps) +1)
+pval_BL_BR <- (sum(Perm_BL_BR$Overlaps >= 1465) +1)/(length(Perm_BL_BR$Overlaps) +1)
+sprintf("Empirical p-value: %.10f", pval_BL_BR)  # p-value is lower than 0.01
+
+
+# BL vs GO
+Overlaps <- "Overlaps"  # The vector is reset
+
+for (i in x){
+BL_repeat <- BL_myDiff_df[sample(nrow(BL_myDiff_df), 4924, replace = FALSE), ]; GO_repeat <- GO_myDiff_df[sample(nrow(GO_myDiff_df), 6057, replace = FALSE), ]; Overlaps_repeat <- merge(BL_repeat,GO_repeat, by=c("chr", "start", "strand")); Ov_rep <- nrow(Overlaps_repeat); Overlaps <- append(Overlaps, Ov_rep)
+}
+
+Overlaps <- Overlaps[!Overlaps == 'Overlaps']
+Perm_BL_GO <- data.frame(x, Overlaps)
+Perm_BL_GO$Overlaps <- as.numeric(Perm_BL_GO$Overlaps)  
+summary(Perm_BL_GO$Overlaps)
+
+# Calculation of p-value
+pval_BL_GO <- (sum(Perm_BL_GO$Overlaps >= 2055) +1)/(length(Perm_BL_GO$Overlaps) +1)
+sprintf("Empirical p-value: %.10f", pval_BL_GO)  # p-value is lower than 0.01
+
+
+# BL vs LI
+Overlaps <- "Overlaps"
+
+for (i in x){
+BL_repeat <- BL_myDiff_df[sample(nrow(BL_myDiff_df), 4924, replace = FALSE), ]; LI_repeat <- LI_myDiff_df[sample(nrow(LI_myDiff_df), 8869, replace = FALSE), ]; Overlaps_repeat <- merge(BL_repeat,LI_repeat, by=c("chr", "start", "strand")); Ov_rep <- nrow(Overlaps_repeat); Overlaps <- append(Overlaps, Ov_rep)
+}
+
+Overlaps <- Overlaps[!Overlaps == 'Overlaps']
+Perm_BL_LI <- data.frame(x, Overlaps)
+Perm_BL_LI$Overlaps <- as.numeric(Perm_BL_LI$Overlaps)
+summary(Perm_BL_LI$Overlaps)
+
+# Calculation of p-value
+pval_BL_LI <- (sum(Perm_BL_LI$Overlaps >= 1465) +1)/(length(Perm_BL_LI$Overlaps) +1)
+sprintf("Empirical p-value: %.10f", pval_BL_LI)  # p-value is lower than 0.01
+
+
+# BL vs MU
+Overlaps <- "Overlaps"
+
+for (i in x){
+BL_repeat <- BL_myDiff_df[sample(nrow(BL_myDiff_df), 4924, replace = FALSE), ]; MU_repeat <- MU_myDiff_df[sample(nrow(MU_myDiff_df), 10921, replace = FALSE), ]; Overlaps_repeat <- merge(BL_repeat,MU_repeat, by=c("chr", "start", "strand")); Ov_rep <- nrow(Overlaps_repeat); Overlaps <- append(Overlaps, Ov_rep)
+}
+
+Overlaps <- Overlaps[!Overlaps == 'Overlaps']
+Perm_BL_MU <- data.frame(x, Overlaps)
+Perm_BL_MU$Overlaps <- as.numeric(Perm_BL_MU$Overlaps)
+summary(Perm_BL_MU$Overlaps)
+
+# Calculation of p-value
+pval_BL_MU <- (sum(Perm_BL_MU$Overlaps >= 1465) +1)/(length(Perm_BL_MU$Overlaps) +1)
+sprintf("Empirical p-value: %.10f", pval_BL_MU)  # p-value is lower than 0.01
+
+```
+
+Graphical representation:
+```{r}
+#BL vs BR
+write.csv2(Perm_BL_BR, "results/Perm_BL_BR.csv")
+# calculate p-value using the formula above in excel with the =COUNT.IF function and check where is p = 0.01 located
+Perm_BL_BR <- read.csv2("results/Perm_BL_BR.csv")
+Perm_BL_BR_counts <- Perm_BL_BR %>%
+  group_by(Overlaps) %>%
+  summarize(Counts = n())
+
+Perm_BL_BR_counts <- data.frame(Perm_BL_BR_counts)
+z <- c(1465,1)  # We add the empirical observation
+Perm_BL_BR_counts <- rbind(Perm_BL_BR_counts, z)
+
+Perm_BL_BR_fig <- ggplot(Perm_BL_BR_counts) +
+  geom_bar(aes(x= Perm_BL_BR_counts$Overlaps, y=Perm_BL_BR_counts$Counts), stat="identity", color = "yellow4") +
+  geom_vline(xintercept = 90.63, color = "black", linewidth = 1) +
+  geom_vline(xintercept = 113, color = "orange", linewidth = 1) +
+  geom_vline(xintercept = 1465, color = "firebrick2", linewidth = 1) +
+  geom_segment(aes(x=113, y= 320, xend = 1465, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  geom_segment(aes(x=1465, y= 320, xend = 113, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(breaks = c(0,450,900,1350,1800)) +
+  labs(x = "Overlaps",
+       y = "Number of occurrences") +
+  coord_capped_cart(ylim = c(0,400),
+                    xlim = c(0,1800),
+                    bottom = waiver(),
+                    top = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Perm_BL_BR.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+
+#BL vs GO
+write.csv2(Perm_BL_GO, "results/Perm_BL_GO.csv")
+# calculate p-value using the formula above in excel with the =COUNT.IF function and check where is p = 0.01 located
+Perm_BL_GO <- read.csv2("results/Perm_BL_GO.csv")
+Perm_BL_GO_counts <- Perm_BL_GO %>%
+  group_by(Overlaps) %>%
+  summarize(Counts = n())
+
+Perm_BL_GO_counts <- Perm_BL_GO %>%
+  group_by(Overlaps) %>%
+  summarize(Counts = n())
+
+Perm_BL_GO_counts <- data.frame(Perm_BL_GO_counts)
+z <- c(2055,1)
+Perm_BL_GO_counts <- rbind(Perm_BL_GO_counts, z)
+summary(Perm_BL_GO$Overlaps)
+
+Perm_BL_GO_fig <- ggplot(Perm_BL_GO_counts) +
+  geom_bar(aes(x= Perm_BL_GO_counts$Overlaps, y=Perm_BL_GO_counts$Counts), stat="identity", color = "springgreen3") +
+  geom_vline(xintercept = 76.85, color = "black", linewidth = 1) +
+  geom_vline(xintercept = 98, color = "orange", linewidth = 1) +
+  geom_vline(xintercept = 2055, color = "firebrick2", linewidth = 1) +
+  geom_segment(aes(x=98, y= 400, xend = 2055, yend=400),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  geom_segment(aes(x=2055, y= 400, xend = 98, yend=400),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  labs(x = "Overlaps",
+       y = "Number of occurrences") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(breaks = c(0, 600, 1200, 1800, 2400)) +
+  coord_capped_cart(xlim = c(40,2400),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Perm_BL_GO.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+
+#BL vs LI
+write.csv2(Perm_BL_LI, "results/Perm_BL_LI.csv")
+# calculate p-value using the formula above in excel with the =COUNT.IF function and check where is p = 0.01 located
+Perm_BL_LI <- read.csv2("results/Perm_BL_LI.csv")
+
+Perm_BL_LI_counts <- Perm_BL_LI %>%
+  group_by(Overlaps) %>%
+  summarize(Counts = n())
+
+Perm_BL_LI_counts <- data.frame(Perm_BL_LI_counts)
+z <- c(1958,1)
+Perm_BL_LI_counts <- rbind(Perm_BL_LI_counts, z)
+summary(Perm_BL_LI$Overlaps)
+
+Perm_BL_LI_fig <- ggplot(Perm_BL_LI_counts) +
+  geom_bar(aes(x= Perm_BL_LI_counts$Overlaps, y=Perm_BL_LI_counts$Counts), stat="identity", color = "dodgerblue2") +
+  geom_vline(xintercept = 116.1, color = "black", linewidth = 1) +
+  geom_vline(xintercept = 141, color = "orange", linewidth = 1) +
+  geom_vline(xintercept = 1958, color = "firebrick2", linewidth = 1) +
+  geom_segment(aes(x=141, y= 320, xend = 1958, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  geom_segment(aes(x=1958, y= 320, xend = 141, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  labs(x = "Overlaps",
+       y = "Number of occurrences") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(breaks = c(0, 600, 1200, 1800, 2400)) +
+  coord_capped_cart(xlim = c(80,2400),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Perm_BL_LI.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+
+#BL vs MU
+write.csv2(Perm_BL_MU, "results/Perm_BL_MU.csv")
+# calculate p-value using the formula above in excel with the =COUNT.IF function and check where is p = 0.01 located
+Perm_BL_MU <- read.csv2("results/Perm_BL_MU.csv")
+
+Perm_BL_MU_counts <- Perm_BL_MU %>%
+  group_by(Overlaps) %>%
+  summarize(Counts = n())
+summary(Perm_BL_MU$Overlaps)
+
+Perm_BL_MU_counts <- data.frame(Perm_BL_MU_counts)
+z <- c(1902,1)
+Perm_BL_MU_counts <- rbind(Perm_BL_MU_counts, z)
+
+Perm_BL_MU_fig <- ggplot(Perm_BL_MU_counts) +
+  geom_bar(aes(x= Perm_BL_MU_counts$Overlaps, y=Perm_BL_MU_counts$Counts), stat="identity", color = "orchid2") +
+  geom_vline(xintercept = 141.8, color = "black", linewidth = 1) +
+  geom_vline(xintercept = 170, color = "orange", linewidth = 1) +
+  geom_vline(xintercept = 1902, color = "firebrick2", linewidth = 1) +
+  geom_segment(aes(x=170, y= 320, xend = 1902, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  geom_segment(aes(x=1902, y= 320, xend = 170, yend=320),
+               arrow = arrow(length = unit(0.4, "cm")),
+               color = "black", size = 0.5) +
+  labs(x = "Overlaps",
+       y = "Number of occurrences") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(breaks = c(0, 600, 1200, 1800, 2400)) +
+  coord_capped_cart(xlim = c(100,2400),
+                    ylim = c(0,400),
+                    top = waiver(),
+                    bottom = waiver()) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.y = element_text(size = 38, margin = margin(r = 10)),
+        axis.title.x = element_text(size = 38, margin = margin(t = 10)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Perm_BL_MU.png", plot=last_plot(), width = 3000, height = 2500, units = "px")
+
+
+```
+
+
+## SUMMARY FIGURE
+
+In order to better visualize our results, we create one last figure, in fashion of Fig. 1 of the thesis (Fig. 3 of the review). To do so we need to create separate excel sheets with the appropriate data, extracted from the results.
+
+Fig. A: overlaps per tissue and average
+```{r}
+Summary_overlaps <- read.csv2("Summary_overlaps.csv", sep = ";", dec = ".", header = TRUE, na.strings = "-")
+
+ggplot(Summary_overlaps, aes(x= Summary_overlaps$Tissue, y=Summary_overlaps$Overlaps)) +
+  geom_errorbar(aes(x=Summary_overlaps$Tissue, ymin=(Summary_overlaps$Overlaps-Summary_overlaps$Standard.Error), ymax=(Summary_overlaps$Overlaps+Summary_overlaps$Standard.Error)),
+                width=0.4, colour="blue", alpha=0.9, linewidth=1) +
+  geom_bar(stat="identity", width = 0.5, fill = "blue") +
+  labs(y = "Mean overlapped \n DMCs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)),
+                     limits = c(0,2500),
+                     breaks = c(0,500,1000,1500,2000,2500)) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(angle = 45, hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 38, margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Summary_overlaps.png", plot=last_plot(), width = 3750, height = 3000, units = "px")
+
+```
+
+Fig. B: percent overlaps per tissue and average
+```{r}
+Summary_percent_overlaps <- read.csv2("Summary_percent_overlaps.csv", sep = ";", dec = ".", header = TRUE, na.strings = "-")
+
+ggplot(Summary_percent_overlaps, aes(x= Summary_percent_overlaps$Tissue, y=Summary_percent_overlaps$Overlaps)) +
+  geom_errorbar(aes(x=Summary_percent_overlaps$Tissue, ymin=(Summary_percent_overlaps$Overlaps-Summary_percent_overlaps$Standard.Error), ymax=(Summary_percent_overlaps$Overlaps+Summary_percent_overlaps$Standard.Error)),
+                width=0.4, colour="blue", alpha=0.9, linewidth=1) +
+  geom_bar(stat="identity", width = 0.5, fill = "blue") +
+  labs(y = "Mean overlapped \n DMCs") +
+  scale_y_continuous(expand = expansion(mult = c(0, .1)),
+                     limits = c(0,40)) +
+  theme(legend.position="none",
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(angle = 45, hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 38, margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Summary_percent_overlaps.png", plot=last_plot(), width = 3750, height = 3000, units = "px")
+
+```
+
+Fig. C: concordance per tissue and average
+```{r}
+Summary_concordance <- read.csv2("Summary_concordance.csv", sep = ";", dec = ".", header = TRUE, na.strings = "-")
+
+ggplot(Summary_concordance, aes(x=Direction, y=Percentage, colour = Tissue, group = Tissue)) +
+  geom_point(size = 3, aes(shape = Tissue)) +
+  scale_color_manual(values=c("firebrick2", "yellow4", "springgreen3", "dodgerblue2", "orchid2")) +
+  scale_shape_manual(values=c(15, 16, 17, 18, 19)) +
+  geom_line(size = 1) +
+  labs(x = "Concordance Reference - Mirror", y = "Overlaps (%)") +
+  scale_y_continuous(limits = c(0,60)) +
+  theme(legend.position="right",
+        legend.text=element_text(size=26),
+        legend.title=element_text(size=28),
+        axis.text = element_text(size = 36), color="black",
+        axis.text.x = element_text(angle = 45, hjust = 1, color="black"),
+        axis.text.y = element_text(color="black"),
+        axis.title = element_text(size = 38),
+        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        axis.line = element_line(linewidth=1.5, color="black"),
+        axis.ticks = element_line(linewidth = 1.5, color = "black"),
+        axis.ticks.length  = unit(0.5, "cm"),
+        panel.background = element_rect(fill='transparent'))
+
+ggsave("results/Summary_concordance.png", plot=last_plot(), width = 3750, height = 3350, units = "px")
+
+```
