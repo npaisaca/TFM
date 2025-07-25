@@ -29,7 +29,7 @@ if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install(c("methylKit"))
 
-lapply(c("dplyr", "tidyverse", "ggplot2", "ggrepel", "methylKit", "patchwork", "powerjoin", "lemon"), library, character.only=TRUE)
+lapply(c("dplyr", "tidyverse", "ggplot2", "ggrepel", "methylKit", "patchwork", "powerjoin", "lemon", "genomation", "GRanges"), library, character.only=TRUE)
 
 # It is possible that the methylKit package doesn't load and, instead, this error appears:
   # Error: package or namespace load failed for ‘methylKit’:
